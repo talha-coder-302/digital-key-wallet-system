@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start" : "node server.js"
+    "start": "node server.js"
   },
   "author": "Talha Coder",
   "license": "ISC",
@@ -23,6 +23,7 @@
     "express-session": "^1.18.1",
     "googleapis": "^148.0.0",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.15.0",
     "mongoose": "^8.12.1",
     "passport": "^0.7.0",
     "underscore": "^1.13.7",
