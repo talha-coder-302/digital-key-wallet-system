@@ -24,7 +24,7 @@ exports.generatePermanentKey = async (req, res) => {
     });
     
     if (existingPermanentKey) {
-      return responseHandler.ValidationError(res, 'User already has an active permanent key');
+      return responseHandler.validationError(res, 'User already has an active permanent key');
     }
 
     // Generate encrypted key
@@ -58,7 +58,7 @@ exports.generateTemporaryKey = async (req, res) => {
 
     // Validate required fields for temporary key
     if (!startDate || !endDate || !allowedHours || !Array.isArray(allowedHours)) {
-      return responseHandler.ValidationError(res, "Some fields are required, fill the required fields")
+      return responseHandler.validationError(res, "Some fields are required, fill the required fields")
     }
 
     const user = await User.findById(userId);
@@ -96,7 +96,7 @@ exports.generateTemporaryKey = async (req, res) => {
 exports.verifyKey = async (req, res) => {
   try {
     await connectToDatabase();
-    const { keyId, userId } = req.body;
+    const { keyId, userId } = req.params;
 
     const key = await Key.findOne({ keyId }).populate('userId');
     if (!key) {
@@ -210,6 +210,39 @@ exports.verifyKey = async (req, res) => {
       isVerify: false, 
       message: "Server error" 
     });
+  } finally {
+    await disconnectFromDatabase();
+  }
+};
+
+exports.revokeKey = async (req, res) => {
+  try {
+    await connectToDatabase();
+    const { keyId, userId } = req.params;
+
+    const key = await Key.findOne({ keyId });
+    if (!key) {
+      return responseHandler.notFound(res, "Key not found");
+    }
+
+    if (key.isRevoked) {
+      return responseHandler.validationError(res, "Key is already revoked");
+    }
+
+    key.isRevoked = true;
+    await key.save();
+
+    await Log.create({
+      keyId,
+      userId,
+      isVerify: false,
+      action: "Key Revoked",
+      errorMessage: "Key was manually revoked"
+    });
+
+    return responseHandler.success(res, key, "Key successfully revoked");
+  } catch (err) {
+    return responseHandler.error(res, err.message);
   } finally {
     await disconnectFromDatabase();
   }
