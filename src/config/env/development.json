@@ -6,7 +6,7 @@
         "port":"27017",
         "username":"",
         "password":"",
-        "dbName":"keyProject",
+        "dbName":"key_db",
         "authSource":"admin",
         "options" : {
             "autoIndex": false, 

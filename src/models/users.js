@@ -30,7 +30,10 @@ const userSchema = new mongoose.Schema({
   isDeleted: {
     type: Boolean,
     default: false
-  }
+  },
+  refreshToken:{
+    type:String
+  },
 });
 
 module.exports = mongoose.model('User', userSchema);

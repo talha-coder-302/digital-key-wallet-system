@@ -15,13 +15,19 @@ exports.createUser = async (req, res) => {
       return responseHandler.validationError(res, "Email already registered, please choose another");
     }
 
+    const phoneExist = await User.findOne({ phone });
+    if (phoneExist) {
+      return responseHandler.validationError(res, "Phone Number already registered, please choose another");
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = await User.create({ email, password: hashedPassword, role, name, phone });
-    res.status(201).json({ status: 'success', data: user });
+
+    return responseHandler.success(res, user, "User Created Successfully")
   } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+    return responseHandler.error(res, err.messsage)
   } finally {
     await disconnectFromDatabase();
   }
@@ -30,9 +36,9 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     await connectToDatabase();
-    const { userId } = req.query;
+    const { userId } = req.params;
     const { email, password, role, name, phone } = req.body;
-    // Find the user by their ID
+    
     const user = await User.findById(userId);
     if (!user) {
       return responseHandler.notFound(res, "User not found");
@@ -46,25 +52,23 @@ exports.updateUser = async (req, res) => {
       }
     }
 
-    // If a new password is provided, hash it
     let hashedPassword = user.password;
     if (password) {
       const salt = await bcrypt.genSalt(10);
       hashedPassword = await bcrypt.hash(password, salt);
     }
 
-    // Update the user with the new data
     user.email = email || user.email;
     user.password = hashedPassword;
     user.role = role || user.role;
     user.name = name || user.name;
     user.phone = phone || user.phone;
 
-    await user.save(); // Save the updated user
+    await user.save();
 
-    res.status(200).json({ status: 'success', data: user });
+    return responseHandler.success(res, user, "User Updated Successfully")
   } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+    return responseHandler.error(res, err.messsage)
   } finally {
     await disconnectFromDatabase();
   }
@@ -73,7 +77,7 @@ exports.updateUser = async (req, res) => {
 exports.deleteUser = async (req, res) => {
   try {
     await connectToDatabase();
-    const { userId } = req.query;
+    const { userId } = req.params;
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -82,22 +86,12 @@ exports.deleteUser = async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ 
-        status: 'fail', 
-        message: 'User not found' 
-      });
+      return responseHandler.notFound(res, "User Not Found")
     }
 
-    res.status(200).json({ 
-      status: 'success', 
-      message: 'User is deleted successfully',
-      data: user 
-    });
+    return responseHandler.success(res, user, "User Deleted Successfully")
   } catch (err) {
-    res.status(400).json({ 
-      status: 'fail', 
-      message: err.message 
-    });
+    return responseHandler.error(res, err.messsage)
   } finally {
     await disconnectFromDatabase();
   }
@@ -107,17 +101,9 @@ exports.getAllUsers = async (req, res) => {
   try {
     await connectToDatabase();
     const users = await User.find({ isDeleted: false }).populate('keys');
-    res.status(200).json({ 
-      status: 'success', 
-      data: users,
-      message: 'Active users retrieved successfully' 
-    });
+    return responseHandler.success(res, users, "User Updated Successfully")
   } catch (err) {
-    res.status(500).json({ 
-      status: 'error',
-      message: 'Failed to fetch users',
-      error: err.message 
-    });
+    return responseHandler.error(res, err.messsage)
   } finally {
     await disconnectFromDatabase();
   }
@@ -132,9 +118,9 @@ exports.revokeKey = async (req, res) => {
       { isRevoked: true },
       { new: true }
     );
-    res.status(200).json({ status: 'success', data: key });
+    return responseHandler.success(res, key, "Key Revoked")
   } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+    return responseHandler.error(res, err.messsage)
   } finally {
     await disconnectFromDatabase();
   }
@@ -156,16 +142,13 @@ exports.login = async (req, res) => {
       const isMatch = await bcrypt.compare(password, user.password);
 
       if (!isMatch) {
-          await User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } });
           return responseHandler.validationError(res, "Your password is incorrect");
       }
 
       // Reset failed login attempts on successful login
-      await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0 } });
       const payload = await tokenPayload(user)
       await generateTokens(payload, res, user);
       req.session.user = user;
-      // user.online = true;
       let savedUser = await user.save();
       console.log(savedUser)
       return responseHandler.success(res, user, "LoggedIn Successfully");
@@ -175,46 +158,46 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.refreshToken = async (req, res) => {
-  const refreshToken = req.cookies['refreshToken'];
-  if (!refreshToken) {
-      return responseHandler.unauthorized(res, {}, "Refresh token is missing");
-  }
+// exports.refreshToken = async (req, res) => {
+//   const refreshToken = req.cookies['refreshToken'];
+//   if (!refreshToken) {
+//       return responseHandler.unauthorized(res, {}, "Refresh token is missing");
+//   }
 
-  try {
-      const decoded = await verifyToken(refreshToken)
-      const user = await User.findById(decoded.id);
-      if (!user || user.refreshToken !== refreshToken) {
-          return responseHandler.unauthorized(res, {}, "Invalid refresh token");
-      }
+//   try {
+//       const decoded = await verifyToken(refreshToken)
+//       const user = await User.findById(decoded.id);
+//       if (!user || user.refreshToken !== refreshToken) {
+//           return responseHandler.unauthorized(res, {}, "Invalid refresh token");
+//       }
 
-      // Generate new access token
-      const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user);
+//       // Generate new access token
+//       const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user);
 
-      // Update and save new refresh token
-      user.refreshToken = newRefreshToken;
-      await user.save();
+//       // Update and save new refresh token
+//       user.refreshToken = newRefreshToken;
+//       await user.save();
 
-      responseHandler.success(res, {}, "Set new refresh token successfully");
-  } catch (error) {
-      return res.status(403).json({ message: 'Invalid or expired refresh token' });
-  }
-}
+//       responseHandler.success(res, {}, "Set new refresh token successfully");
+//   } catch (error) {
+//       return res.status(403).json({ message: 'Invalid or expired refresh token' });
+//   }
+// }
 
-exports.authJwtToken = async (req, res, next) => {
-  const token = req.cookies.jwt; // Read token from cookies
-console.log(req.cookies.jwt,req.cookies,req.cookies['jwt']);    
-if (!token) {
-      return responseHandler.unauthorized(res, {}, "Token is missing");
-  }
-  try {
-      //const decoded = await verifyToken(token);
-      //req.user = decoded;
-      res.json({token})
-  } catch (error) {
-      return responseHandler.unauthorized(res, {}, "Invalid token");
-  }
-}
+// exports.authJwtToken = async (req, res, next) => {
+//   const token = req.cookies.jwt; // Read token from cookies
+// console.log(req.cookies.jwt,req.cookies,req.cookies['jwt']);    
+// if (!token) {
+//       return responseHandler.unauthorized(res, {}, "Token is missing");
+//   }
+//   try {
+//       //const decoded = await verifyToken(token);
+//       //req.user = decoded;
+//       res.json({token})
+//   } catch (error) {
+//       return responseHandler.unauthorized(res, {}, "Invalid token");
+//   }
+// }
 
 exports.logout = async (req, res) => {
   try {
