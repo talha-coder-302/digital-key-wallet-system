@@ -36,8 +36,13 @@ exports.generatePermanentKey = async (req, res) => {
     });
 
     // Generate Google Wallet Link
-    const walletLink = await googleWalletService.generateWalletLink(keyId);
-    key.googleWalletLink = walletLink;
+    const walletResult = await googleWalletService.generateWalletLink(keyId);
+
+    if (!walletResult.success) {
+      return responseHandler.error(res, walletResult.message);
+    }
+
+    key.googleWalletLink = walletResult.data;
     await key.save();
 
     // Update User's keys array
@@ -78,9 +83,16 @@ exports.generateTemporaryKey = async (req, res) => {
     });
 
     // Generate Google Wallet Link
-    const walletLink = await googleWalletService.generateWalletLink(keyId);
-    key.googleWalletLink = walletLink;
+    const walletResult = await googleWalletService.generateWalletLink(keyId);
+
+    if (!walletResult.success) {
+      return responseHandler.error(res, walletResult.message);
+    }
+
+    key.googleWalletLink = walletResult.data;
     await key.save();
+
+
 
     // Update User's keys array
     await User.findByIdAndUpdate(userId, { $push: { keys: key._id } });
